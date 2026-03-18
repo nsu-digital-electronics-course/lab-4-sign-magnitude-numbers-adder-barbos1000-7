@@ -7,43 +7,52 @@ module sign_mag_adder #(
     output logic overflow
 );
 
-    // Старший бит — знак, остальные — абсолютное значение
-    logic sign_a = a[SIZE-1];
-    logic sign_b = b[SIZE-1];
+    // Выделяем знаки и модули для удобства
+    logic sign_a, sign_b;
+    logic [SIZE-2:0] mag_a, mag_b;
+    
+    assign sign_a = a[SIZE-1];
+    assign sign_b = b[SIZE-1];
+    assign mag_a  = a[SIZE-2:0];
+    assign mag_b  = b[SIZE-2:0];
 
-    logic [SIZE-2:0] mag_a = a[SIZE-2:0];
-    logic [SIZE-2:0] mag_b = b[SIZE-2:0];
-
-    // Внутренние переменные результата
-    logic [SIZE-2:0] mag_res;
-    logic sign_res;
-    logic carry_out;
+    // Промежуточные сигналы для результата
+    logic [SIZE-2:0] res_mag;
+    logic res_sign;
+    logic carry;
 
     always_comb begin
-        // значения по умолчанию (чтобы не было latch)
-        mag_res   = '0;
-        sign_res  = 1'b0;
-        overflow  = 1'b0;
+        // Значения по умолчанию
+        overflow = 1'b0;
+        res_mag  = 0;
+        res_sign = 1'b0;
 
-        // одинаковые знаки → обычное сложение модулей
         if (sign_a == sign_b) begin
-            {carry_out, mag_res} = mag_a + mag_b;
-            sign_res = sign_a;
-            overflow = carry_out;
-        end
-        // разные знаки → фактически вычитание
-        else begin
-            if (mag_a >= mag_b) begin
-                mag_res  = mag_a - mag_b;
-                sign_res = sign_a;
+            // Сложение чисел с одинаковыми знаками
+            {carry, res_mag} = mag_a + mag_b;
+            res_sign = sign_a;
+            overflow = carry;
+        end else begin
+            // Сложение чисел с разными знаками (вычитание модулей)
+            if (mag_a > mag_b) begin
+                res_mag = mag_a - mag_b;
+                res_sign = sign_a;
+            end else if (mag_b > mag_a) begin
+                res_mag = mag_b - mag_a;
+                res_sign = sign_b;
             end else begin
-                mag_res  = mag_b - mag_a;
-                sign_res = sign_b;
+                // Числа равны по модулю, знаки разные -> +0
+                res_mag = 0;
+                res_sign = 1'b0; 
             end
         end
 
-        // если результат равен нулю — делаем +0
-        s = (mag_res == 0) ? '0 : {sign_res, mag_res};
+        // Финальная нормализация нуля: если модуль 0, знак всегда 0
+        if (res_mag == 0) begin
+            s = {1'b0, {(SIZE-1){1'b0}}};
+        end else begin
+            s = {res_sign, res_mag};
+        end
     end
 
 endmodule
